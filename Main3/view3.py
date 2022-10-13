@@ -1,7 +1,7 @@
 from glob import glob
 import telebot
 import random
-import config
+import config3 as config
 from telebot import *
 import requests
 import handlers.generator as gen
@@ -14,11 +14,46 @@ city_index = None
 price = 0
 product = None
 captcha_string = None
+id_list = []
+
+def checkList(data, list):                        #!!! CAPTCHA
+    for x in list:
+        if int(data) == int(x):
+            return 1
+        else:
+            pass
+
+def parseChatID():
+    global id_list
+    try:
+        with open('./storage/id.txt', 'r', encoding='utf-8') as file:
+            id_list = [f"{x}" for x in file]
+            id_list = list(map(lambda s: s.strip(), id_list))
+    except: 
+        with open('storage/id.txt', 'w+', encoding='utf-8') as file:
+            id_list = [f"{x}" for x in file]
+            id_list = list(map(lambda s: s.strip(), id_list))
+    
+
+def saveChatID(message):
+    if checkList(message.chat.id, id_list) != 1:      
+        with open('storage/id.txt', 'w', encoding='utf-8') as file:  
+            if bool(id_list) == True:
+                for i in id_list:
+                    file.write(f"{i}\n")
+
+                file.write(f"{message.chat.id}")
+                return True
+            else:
+                file.write(f"{message.chat.id}")
+                return False
+    else:
+        pass
 
 def paymentChoise(message, purchase):
     keyboard = telebot.types.InlineKeyboardMarkup()
-    keyboard.add(types.InlineKeyboardButton("Кодом", callback_data="code"))
-    keyboard.add(types.InlineKeyboardButton("Оплата на карту", callback_data="card"))
+    # keyboard.add(types.InlineKeyboardButton("Кодом", callback_data="code"))
+    keyboard.add(types.InlineKeyboardButton("Оплата на карту💳", callback_data="card"))
     keyboard.add(types.InlineKeyboardButton("Bitcoin", callback_data="btc"))
     keyboard.add(types.InlineKeyboardButton("Litecoin", callback_data="ltc"))
     keyboard.add(types.InlineKeyboardButton("Назад", callback_data="cancel"))
@@ -29,25 +64,8 @@ def paymentChoise(message, purchase):
 
     bot.send_message(chat_id=message.chat.id, reply_markup=keyboard, text=f"""Чем вы будете оплачивать:""")
 
-
+# Парсим ид всех пользователей во избежания повторного ввода капчи
 # * CHATBOT function
-@bot.message_handler(commands=['start']) 
-def captcha_message(message):
-    global captcha_string
-    captcha_string = gen.generate_captcha(4)
-    bot.send_photo(message.chat.id, open("storage/captcha.png", "rb"), caption='Введите текст с картинки:')
-    bot.register_next_step_handler(message, check_captcha)
-
-@bot.message_handler(content_types=["text"])
-def check_captcha(message):
-    if captcha_string == message.text:
-        bot.send_message(message.chat.id, "Поздравляем. Вы верно ввели капчу!")
-        startMsg(message)
-    else:
-        bot.send_message(message.chat.id, "Текст не совпадает. Попробуйте ещё раз")
-        captcha_message(message)
-        
-
 def startMsg(message):    
     # создаём старт кнопки
     keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
@@ -60,16 +78,62 @@ def startMsg(message):
     bots = types.InlineKeyboardButton('Мои боты', callback_data='bots')
     refferal = types.InlineKeyboardButton('Реферальная програма', callback_data='refferal')
     latest = types.InlineKeyboardButton('Последний заказ', callback_data='latest')
-    support = types.InlineKeyboardButton('Оператор', url=config.SUPPORT)
+    bonus = types.InlineKeyboardButton('Бонус', callback_data='bonus')
+
+    contact_spb = types.InlineKeyboardButton('Контакты СПБ', url=config.CONTACT_SPB)
+    contact_msk = types.InlineKeyboardButton('Контакты МСК', url=config.CONTACT_MSK)
+    visit = types.InlineKeyboardButton('Визитка(вход с VPN)', url=config.VISIT)
+    website = types.InlineKeyboardButton('Наш сайт (вход с VPN)', url=config.WEBSITE)
+    work_spb = types.InlineKeyboardButton('Работа (Доки/Залог) СПБ', url=config.WORK_SPB)
+    work_msk = types.InlineKeyboardButton('Работа (Доки/Залог) МСК', url=config.WORK_MSK)
+    delivery_spb = types.InlineKeyboardButton('Доставка Опт СПБ', url=config.DELIVERY_SPB)
+    delivery_msk = types.InlineKeyboardButton('Доставка Опт МСК', url=config.DELIVERY_MSK)
 
     keyboard.add(*cities_list)
     keyboard.add(balance)
     keyboard.add(bots)
     keyboard.add(refferal)
     keyboard.add(latest)
-    keyboard.add(support)
+    keyboard.add(bonus)
 
-    bot.send_message(chat_id=message.chat.id, reply_markup=keyboard, text=f"""Выберите пожалуйста город""")
+    keyboard.add(contact_spb)
+    keyboard.add(contact_msk)
+    keyboard.add(visit)
+    keyboard.add(website)
+    keyboard.add(work_spb)
+    keyboard.add(work_msk)
+    keyboard.add(delivery_spb)
+    keyboard.add(delivery_msk)
+
+    bot.send_message(chat_id=message.chat.id, reply_markup=keyboard, text=f"""Выберите город""")
+
+
+@bot.message_handler(content_types='text')
+def checkUser(message):
+    global id_list
+    parseChatID() #!!! CAPTCHA
+    # Проверяем наличие id пользователя в id.txt. Если он есть даем стартовое сообщение, иначе пользователь должен ввести капчу  #!!! CAPTCHA
+    if checkList(message.chat.id, id_list) == 1: #!!! CAPTCHA
+        startMsg(message) 
+    else: #!!! CAPTCHA
+        bot.register_next_step_handler(message, captcha_message) 
+
+def captcha_message(message): #!!! CAPTCHA
+    global captcha_string
+
+    captcha_string = gen.generate_captcha(5)
+    bot.send_photo(message.chat.id, open("storage/captcha.png", "rb"), caption=f'Привет {message.from_user.username}. Пожалуйста, решите капчу с цифрами на этом изображении, чтобы убедиться, что вы человек.')
+    bot.register_next_step_handler(message, check_captcha)
+
+
+def check_captcha(message): #!!! CAPTCHA
+    if captcha_string == message.text:
+        saveChatID(message)
+        bot.send_message(message.chat.id, "Привет")
+        startMsg(message)
+    else:
+        bot.send_message(message.chat.id, "Текст не совпадает. Попробуйте ещё раз")
+        captcha_message(message)
 
 def payMsg(message):
     global price
@@ -114,7 +178,7 @@ def callback_inline(call):
                         # bot.send_message(call.message.chat.id, reply_markup=keyboard, text=f"""Выберите товар""")
                         bot.send_message(call.message.chat.id, reply_markup=keyboard, text=f"""Выберите товар""")
                     else:
-                        bot.send_message(call.message.chat.id, reply_markup=keyboard, text=f"""Товар закончился""")
+                        bot.send_message(call.message.chat.id, reply_markup=keyboard, text=f"""Товар закончился, зайдите позже""")
 
                     return city_index
 
@@ -144,7 +208,7 @@ def callback_inline(call):
                     keyboard.add(types.InlineKeyboardButton("Назад", callback_data="cancel"))
 
                     city_index = None
-                    bot.send_message(call.message.chat.id, reply_markup=keyboard, text=f"""Выберите регион""")
+                    bot.send_message(call.message.chat.id, reply_markup=keyboard, text=f"""Выберите метро""")
                     return city_index
 
         if call.data == "region":
@@ -168,11 +232,14 @@ def callback_inline(call):
             paymentChoise(call.message, True)
             
         if call.data == "code":
-            bot.send_message(call.message.chat.id, text=f"""Технические работы""") 
+            bot.send_message(call.message.chat.id, reply_markup=keyboard, text=f"""Технические работы""") 
             price = 0
             startMsg(call.message)
 
         if call.data == "card":
+            keyboard = telebot.types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton("Проблема с оплатой", callback_data="payProblem"))
+            keyboard.add(types.InlineKeyboardButton("На главную", callback_data="cancel"))
             ID = random.randrange(10000, 1000000)
 
             bot.send_message(call.message.chat.id, f"""✅ ВЫДАННЫЕ РЕКВИЗИТЫ ДЕЙСТВУЮТ 30 МИНУТ
@@ -188,34 +255,64 @@ ID: {ID}
 ‼️ у вас есть 30 мин на оплату, после чего платёж не будет зачислен
 ‼️ перевёл неточную сумму - оплатил чужой заказ""")       
 
+            bot.send_message(call.message.chat.id, f"""Если в течении часа средства не выдались автоматически то нажмите на кнопку - "Проблема с оплатой" """, reply_markup=keyboard)   
+
             price = 0
             return price
 
         if call.data == "btc":
+            keyboard = telebot.types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton("Проблема с оплатой", callback_data="payProblem"))
+            keyboard.add(types.InlineKeyboardButton("На главную", callback_data="cancel"))
+
             r = requests.get('https://blockchain.info/ticker')
             bitprice = int((r.json()['RUB']['buy']))
 
             actual = '{:f}'.format(price / bitprice)
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"""Оплатите {actual} BTC на адрес {config.BTC}""")       
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"""Оплатите {actual} BTC на адрес {config.BTC}""", reply_markup=keyboard)       
 
         if call.data == "ltc":
+            keyboard = telebot.types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton("Проблема с оплатой", callback_data="payProblem"))
+            keyboard.add(types.InlineKeyboardButton("На главную", callback_data="cancel"))
+
             actual = '{:f}'.format(price / 10145)
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"""Оплатите {actual} LTC на адрес {config.LTC}""")  
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"""Оплатите {actual} LTC на адрес {config.LTC}""", reply_markup=keyboard)  
 
         if call.data == 'balance':
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f'Введите сумму на которую вы хотите пополнить баланс')
+            bot.send_message(call.message.chat.id, text=f'Введите сумму на которую вы хотите пополнить баланс')
             bot.register_next_step_handler(call.message, payMsg)
             
+        if call.data == 'payProblem':
+            bot.answer_callback_query(callback_query_id=call.id, text="Подождите 30 минут с начала пополнения, в случае неполучения средств отправьте скриншот произведенной оплаты саппорту", show_alert=True)
+
+        if call.data == 'bonus':
+            bot.answer_callback_query(callback_query_id=call.id, text="Для получения бонуса совершите 5 покупок в течении недели", show_alert=True)
+
 
         if call.data == "latest":
             bot.send_message(call.message.chat.id, "У вас нет подтвержденных заказов")
 
-        if call.data == "bots":
-            bot.send_message(call.message.chat.id, """Ваши боты:
-У вас нет ботов!""")
-            startMsg(call.message)
-
         if call.data == "refferal":
-            startMsg(call.message)
+            keyboard = telebot.types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton("Добавить бота", callback_data="addBot"))
+
+            bot.send_message(call.message.chat.id, """Делитесь своими ботами с друзьями и получайте 50руб. с каждого его оплаченного заказа.
+Ваши боты:
+У вас нету ботов!""", reply_markup=keyboard)
+
+        if call.data == "addBot":
+            keyboard = telebot.types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton("На главную", callback_data="cancel"))
+
+            bot.send_message(call.message.chat.id, """Добавление бота доступно от 10-ти покупок""", reply_markup=keyboard)
+
+        if call.data == "bots":
+            keyboard = telebot.types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton("На главную", callback_data="cancel"))
+
+            bot.send_message(call.message.chat.id, """Ваши боты:
+У вас нет ботов!""", reply_markup=keyboard)
+
 if __name__ == '__main__':
     bot.infinity_polling()
